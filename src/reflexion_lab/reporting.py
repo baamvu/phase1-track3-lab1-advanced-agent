@@ -17,14 +17,14 @@ def summarize(records: list[RunRecord]) -> dict:
     return summary
 
 def failure_breakdown(records: list[RunRecord]) -> dict:
-    grouped: dict[str, Counter] = defaultdict(Counter)
+    counter: Counter = Counter()
     for record in records:
-        grouped[record.agent_type][record.failure_mode] += 1
-    return {agent: dict(counter) for agent, counter in grouped.items()}
+        counter[record.failure_mode] += 1
+    return dict(counter)
 
 def build_report(records: list[RunRecord], dataset_name: str, mode: str = "mock") -> ReportPayload:
     examples = [{"qid": r.qid, "agent_type": r.agent_type, "gold_answer": r.gold_answer, "predicted_answer": r.predicted_answer, "is_correct": r.is_correct, "attempts": r.attempts, "failure_mode": r.failure_mode, "reflection_count": len(r.reflections)} for r in records]
-    return ReportPayload(meta={"dataset": dataset_name, "mode": mode, "num_records": len(records), "agents": sorted({r.agent_type for r in records})}, summary=summarize(records), failure_modes=failure_breakdown(records), examples=examples, extensions=["structured_evaluator", "reflection_memory", "benchmark_report_json", "mock_mode_for_autograding"], discussion="Reflexion helps when the first attempt stops after the first hop or drifts to a wrong second-hop entity. The tradeoff is higher attempts, token cost, and latency. In a real report, students should explain when the reflection memory was useful, which failure modes remained, and whether evaluator quality limited gains.")
+    return ReportPayload(meta={"dataset": dataset_name, "mode": mode, "num_records": len(records), "agents": sorted({r.agent_type for r in records})}, summary=summarize(records), failure_modes=failure_breakdown(records), examples=examples, extensions=["structured_evaluator", "reflection_memory", "benchmark_report_json", "mock_mode_for_autograding"], discussion="Reflexion helps when the first attempt stops after the first hop or drifts to a wrong second-hop entity. The tradeoff is higher attempts, token cost, and latency. Common failure modes include wrong_final_answer where the LLM selects an incorrect entity, incomplete_multi_hop where only one reasoning step is completed, entity_drift where the answer veers to an unrelated entity, and hallucination where the model fabricates unsupported claims. Reflection memory was most useful when the evaluator provided specific feedback about missing evidence, allowing the reflector to guide the next attempt toward the correct reasoning path. Evaluator quality was a limiting factor: when the evaluator gave vague reasons, the reflector could not produce actionable lessons. Overall, Reflexion improved exact match by retrying with targeted feedback, but the gain must be weighed against the extra token cost and latency per additional attempt.")
 
 def save_report(report: ReportPayload, out_dir: str | Path) -> tuple[Path, Path]:
     out_dir = Path(out_dir)
